@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SecureDrive - Secure File Sharing Application
 
 A secure file sharing application that uses AES-256 encryption and Blake3 hashing to protect files shared through Google Drive.
@@ -130,3 +131,6 @@ This project is for educational purposes.
 
 Feel free to submit issues and enhancement requests!
 
+=======
+# Secure-File-Share
+>>>>>>> 936f79b9ba6f7c3f33251a17e785ab50046ee21f
