@@ -1,0 +1,902 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SecureDrive{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Welcome, {{ current_user.username }}!</h1>
+        <p>Manage your secure files and shares</p>
+    </div>
+    
+    <div class="dashboard-tabs">
+        <button class="tab-btn active" data-tab="upload">
+            <i class="fas fa-upload"></i> Upload File
+        </button>
+        <button class="tab-btn" data-tab="files">
+            <i class="fas fa-folder"></i> My Files
+        </button>
+        <button class="tab-btn" data-tab="share">
+            <i class="fas fa-share-alt"></i> Share File
+        </button>
+        <button class="tab-btn" data-tab="download">
+            <i class="fas fa-download"></i> Download & Verify
+        </button>
+    </div>
+    
+    <!-- Upload Tab -->
+    <div class="tab-content active" id="uploadTab">
+        <div class="upload-card">
+            <div class="security-mode-selector">
+                <h3><i class="fas fa-shield-alt"></i> Select Security Mode</h3>
+                <div class="mode-options">
+                    <label class="mode-option">
+                        <input type="radio" name="securityMode" value="hash" id="modeHash">
+                        <div class="mode-card">
+                            <div class="mode-header">
+                                <i class="fas fa-fingerprint"></i>
+                                <strong>1️⃣ Hash Mode</strong>
+                            </div>
+                            <div class="mode-description">
+                                <p><strong>Integrity Only</strong></p>
+                                <ul>
+                                    <li>✓ Verify file integrity</li>
+                                    <li>✓ Detect tampering</li>
+                                    <li>✗ No confidentiality protection</li>
+                                    <li>✗ No encryption key required</li>
+                                </ul>
+                                <small>Use case: File integrity verification, duplicate detection</small>
+                            </div>
+                        </div>
+                    </label>
+                    
+                    <label class="mode-option">
+                        <input type="radio" name="securityMode" value="encrypt" id="modeEncrypt">
+                        <div class="mode-card">
+                            <div class="mode-header">
+                                <i class="fas fa-lock"></i>
+                                <strong>2️⃣ Encrypt Mode</strong>
+                            </div>
+                            <div class="mode-description">
+                                <p><strong>Confidentiality Only</strong></p>
+                                <ul>
+                                    <li>✓ Protect file confidentiality</li>
+                                    <li>✓ File contents unreadable without key</li>
+                                    <li>✗ Does not detect tampering</li>
+                                    <li>✗ No hash verification</li>
+                                </ul>
+                                <small>Use case: Private file storage without integrity checks</small>
+                            </div>
+                        </div>
+                    </label>
+                    
+                    <label class="mode-option">
+                        <input type="radio" name="securityMode" value="hash_encrypt" id="modeHashEncrypt" checked>
+                        <div class="mode-card recommended">
+                            <div class="mode-header">
+                                <i class="fas fa-shield-alt"></i>
+                                <strong>3️⃣ Hash + Encrypt Mode</strong>
+                                <span class="badge-recommended">Recommended</span>
+                            </div>
+                            <div class="mode-description">
+                                <p><strong>Confidentiality + Integrity</strong></p>
+                                <ul>
+                                    <li>✓ BLAKE3 ensures integrity</li>
+                                    <li>✓ AES (Fernet) ensures confidentiality</li>
+                                    <li>✓ Decrypt and verify on download</li>
+                                    <li>✓ Most secure option</li>
+                                </ul>
+                                <small>Use case: Secure cloud storage, file sharing, zero-trust environments</small>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="upload-area" id="uploadArea">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h3>Drag & Drop or Click to Upload</h3>
+                <p id="modeDescription">Your files will be hashed with BLAKE3 and encrypted with AES-256</p>
+                <input type="file" id="fileInput" style="display: none;" multiple>
+                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-folder-open"></i> Choose Files
+                </button>
+            </div>
+            <div id="uploadProgress" class="upload-progress"></div>
+            <div id="uploadResults" class="upload-results"></div>
+        </div>
+    </div>
+    
+    <!-- Files Tab -->
+    <div class="tab-content" id="filesTab">
+        <div class="files-header">
+            <h2>Your Files</h2>
+            <button class="btn btn-secondary" onclick="loadFiles()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+        <div id="filesList" class="files-list">
+            <div class="loading">Loading files...</div>
+        </div>
+    </div>
+    
+    <!-- Share Tab -->
+    <div class="tab-content" id="shareTab">
+        <div class="share-card">
+            <h2>Share File</h2>
+            <form id="shareForm" class="share-form">
+                <div class="form-group">
+                    <label for="shareFileId">
+                        <i class="fas fa-file"></i> Select File
+                    </label>
+                    <select id="shareFileId" name="file_id" required>
+                        <option value="">Choose a file...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="shareUsername">
+                        <i class="fas fa-user"></i> Share With (Username)
+                    </label>
+                    <input type="text" id="shareUsername" name="shared_with_username" required 
+                           placeholder="Enter username">
+                </div>
+                
+                <div class="form-group" id="shareKeyGroup">
+                    <label for="shareKey">
+                        <i class="fas fa-key"></i> Encryption Key <span id="shareKeyRequired" style="color: red;">*</span>
+                    </label>
+                    <div class="key-input-group">
+                        <input type="text" id="shareKey" name="encryption_key" 
+                               placeholder="Paste encryption key from upload (if required)">
+                        <button type="button" class="btn-icon" onclick="copyToClipboard('shareKey')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <small id="shareKeyHelpText">Use the encryption key provided when you uploaded the file</small>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-share-alt"></i> Share File
+                </button>
+            </form>
+            <div id="shareMessage" class="message"></div>
+        </div>
+    </div>
+    
+    <!-- Download Tab -->
+    <div class="tab-content" id="downloadTab">
+        <div class="download-card">
+            <h2>Download & Verify File</h2>
+            <form id="downloadForm" class="download-form">
+                <div class="form-group">
+                    <label for="downloadFileId">
+                        <i class="fas fa-file"></i> Select File
+                    </label>
+                    <select id="downloadFileId" name="file_id" required>
+                        <option value="">Choose a file...</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="downloadKeyGroup">
+                    <label for="downloadKey">
+                        <i class="fas fa-key"></i> Encryption Key <span id="keyRequired" style="color: red;">*</span>
+                    </label>
+                    <div class="key-input-group">
+                        <input type="text" id="downloadKey" name="encryption_key" 
+                               placeholder="Enter encryption key (if required)">
+                        <button type="button" class="btn-icon" onclick="copyToClipboard('downloadKey')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                    <small id="keyHelpText">Required for encrypted files</small>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" class="btn btn-primary" onclick="verifyFile()">
+                        <i class="fas fa-check-circle"></i> Verify Integrity
+                    </button>
+                    <button type="button" class="btn btn-success" onclick="downloadFile()">
+                        <i class="fas fa-download"></i> Download File
+                    </button>
+                </div>
+            </form>
+            <div id="verifyResult" class="verify-result"></div>
+            <div id="downloadMessage" class="message"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const tabName = btn.dataset.tab;
+        
+        // Update buttons
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // Update content
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById(tabName + 'Tab').classList.add('active');
+        
+        // Load data when switching tabs
+        if (tabName === 'files') {
+            loadFiles();
+        } else if (tabName === 'share' || tabName === 'download') {
+            loadFileOptions();
+        }
+    });
+});
+
+// File upload
+let storedKeys = {}; // Store encryption keys (for convenience/autofill)
+let fileMeta = {};   // Store hash and key per file for dropdown display
+let lastVerifyStatus = {}; // Track last integrity verification result per file
+
+// Update mode description based on selection
+document.querySelectorAll('input[name="securityMode"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        const modeDescription = document.getElementById('modeDescription');
+        const mode = e.target.value;
+        
+        if (mode === 'hash') {
+            modeDescription.textContent = 'Your files will be hashed with BLAKE3 for integrity verification (no encryption)';
+        } else if (mode === 'encrypt') {
+            modeDescription.textContent = 'Your files will be encrypted with AES-256 (no hash verification)';
+        } else if (mode === 'hash_encrypt') {
+            modeDescription.textContent = 'Your files will be hashed with BLAKE3 and encrypted with AES-256';
+        }
+    });
+});
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+    const files = e.target.files;
+    const progressDiv = document.getElementById('uploadProgress');
+    const resultsDiv = document.getElementById('uploadResults');
+    
+    // Get selected security mode
+    const selectedMode = document.querySelector('input[name="securityMode"]:checked').value;
+    
+    resultsDiv.innerHTML = '';
+    progressDiv.innerHTML = '';
+    
+    for (let file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('security_mode', selectedMode);
+        
+        const progressItem = document.createElement('div');
+        progressItem.className = 'progress-item';
+        progressItem.innerHTML = `
+            <div class="progress-info">
+                <span>${file.name}</span>
+                <span class="progress-text">Uploading...</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+        `;
+        progressDiv.appendChild(progressItem);
+        
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Store meta but don't show sensitive values directly
+                if (data.encryption_key) {
+                    storedKeys[data.file_id] = data.encryption_key;
+                }
+                fileMeta[data.file_id] = {
+                    hash: data.file_hash || null,
+                    key: data.encryption_key || null,
+                    mode: data.security_mode
+                };
+
+                progressItem.querySelector('.progress-text').textContent = 'Uploaded!';
+                progressItem.querySelector('.progress-fill').style.width = '100%';
+                
+                // Build info options based on security mode
+                let infoOptions = '<option value="">Choose what to show...</option>';
+                if (data.file_hash) {
+                    infoOptions += '<option value="hash">Show hash</option>';
+                }
+                if (data.encryption_key) {
+                    infoOptions += '<option value="key">Show encryption key</option>';
+                }
+                
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item success';
+                resultItem.innerHTML = `
+                    <div class="result-header">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>${file.name}</strong>
+                        <span class="badge badge-mode">${data.security_mode.replace('_', ' + ').toUpperCase()}</span>
+                    </div>
+                    <div class="result-content">
+                        <p><strong>File ID:</strong> ${data.file_id}</p>
+                        <p><strong>Security Mode:</strong> ${data.security_mode.replace('_', ' + ')}</p>
+                        ${(data.file_hash || data.encryption_key) ? `
+                        <div class="info-select-group">
+                            <label for="info-select-${data.file_id}"><strong>View sensitive info:</strong></label>
+                            <select id="info-select-${data.file_id}" onchange="onInfoSelectChange(${data.file_id})">
+                                ${infoOptions}
+                            </select>
+                            <div class="key-display" id="info-output-${data.file_id}" style="margin-top: 8px;"></div>
+                        </div>
+                        ` : '<p><em>No sensitive information to display for this security mode.</em></p>'}
+                    </div>
+                `;
+                resultsDiv.appendChild(resultItem);
+            } else {
+                progressItem.querySelector('.progress-text').textContent = 'Failed!';
+                progressItem.className = 'progress-item error';
+                
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item error';
+                resultItem.innerHTML = `
+                    <div class="result-header">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>${file.name}</strong>
+                    </div>
+                    <p>${data.message}</p>
+                `;
+                resultsDiv.appendChild(resultItem);
+            }
+        } catch (error) {
+            progressItem.querySelector('.progress-text').textContent = 'Error!';
+            progressItem.className = 'progress-item error';
+        }
+    }
+    
+    e.target.value = '';
+});
+
+// Drag and drop
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+});
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+});
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    document.getElementById('fileInput').files = e.dataTransfer.files;
+    document.getElementById('fileInput').dispatchEvent(new Event('change'));
+});
+
+// Load files
+async function loadFiles() {
+    const filesList = document.getElementById('filesList');
+    filesList.innerHTML = '<div class="loading">Loading files...</div>';
+    
+    try {
+        const response = await fetch('/files');
+        const data = await response.json();
+        
+        if (data.success && data.files.length > 0) {
+            filesList.innerHTML = data.files.map(file => `
+                <div class="file-item ${file.type}">
+                    <div class="file-icon">
+                        <i class="fas fa-file"></i>
+                    </div>
+                    <div class="file-info">
+                        <h3>${file.filename}</h3>
+                        <p>Size: ${formatFileSize(file.size)} | Uploaded: ${new Date(file.upload_date).toLocaleDateString()}</p>
+                        ${file.type === 'shared' ? '<span class="badge badge-shared">Shared</span>' : '<span class="badge badge-own">Own</span>'}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            filesList.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p>No files yet. Upload your first file!</p></div>';
+        }
+    } catch (error) {
+        filesList.innerHTML = '<div class="error-state">Error loading files</div>';
+    }
+}
+
+// Load file options for share/download
+async function loadFileOptions() {
+    try {
+        const response = await fetch('/files');
+        const data = await response.json();
+        
+        const selectElements = ['shareFileId', 'downloadFileId'];
+        selectElements.forEach(selectId => {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '<option value="">Choose a file...</option>';
+            
+            if (data.success && data.files.length > 0) {
+                data.files.forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file.id;
+                    option.textContent = `${file.filename} (${file.type === 'shared' ? 'Shared' : 'Own'})`;
+                    option.dataset.mode = file.security_mode || 'hash_encrypt';
+                    if (selectId === 'shareFileId') {
+                        select.appendChild(option);
+                    } else {
+                        select.appendChild(option);
+                    }
+                });
+            }
+        });
+        
+        // Update download form based on selected file
+        const downloadSelect = document.getElementById('downloadFileId');
+        if (downloadSelect) {
+            downloadSelect.addEventListener('change', updateDownloadForm);
+        }
+    } catch (error) {
+        console.error('Error loading file options:', error);
+    }
+}
+
+// Update download form based on selected file's security mode
+function updateDownloadForm() {
+    const fileId = document.getElementById('downloadFileId').value;
+    const keyInput = document.getElementById('downloadKey');
+    const keyGroup = document.getElementById('downloadKeyGroup');
+    const keyRequired = document.getElementById('keyRequired');
+    const keyHelpText = document.getElementById('keyHelpText');
+    
+    if (!fileId) {
+        keyInput.required = false;
+        keyRequired.style.display = 'none';
+        keyHelpText.textContent = 'Required for encrypted files';
+        return;
+    }
+    
+    const selectedOption = document.getElementById('downloadFileId').options[document.getElementById('downloadFileId').selectedIndex];
+    const securityMode = selectedOption.dataset.mode || 'hash_encrypt';
+    
+    if (securityMode === 'hash') {
+        // Hash mode: No key needed
+        keyInput.required = false;
+        keyRequired.style.display = 'none';
+        keyHelpText.textContent = 'No encryption key needed for Hash-only mode';
+        keyInput.placeholder = 'Not required for this file';
+    } else if (securityMode === 'encrypt' || securityMode === 'hash_encrypt') {
+        // Encrypt or Hash+Encrypt: Key required
+        keyInput.required = true;
+        keyRequired.style.display = 'inline';
+        keyHelpText.textContent = 'Encryption key is required to decrypt this file';
+        keyInput.placeholder = 'Enter encryption key';
+    }
+    
+    // Auto-fill key if available
+    if (storedKeys[fileId]) {
+        keyInput.value = storedKeys[fileId];
+    } else {
+        keyInput.value = '';
+    }
+    
+    // Reset verify status
+    lastVerifyStatus[fileId] = false;
+    const resultDiv = document.getElementById('verifyResult');
+    if (resultDiv) {
+        resultDiv.innerHTML = '';
+    }
+}
+
+// Share file
+document.getElementById('shareForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        file_id: parseInt(document.getElementById('shareFileId').value),
+        shared_with_username: document.getElementById('shareUsername').value,
+        encryption_key: document.getElementById('shareKey').value
+    };
+    
+    const messageDiv = document.getElementById('shareMessage');
+    messageDiv.className = 'message';
+    messageDiv.textContent = 'Sharing file...';
+    messageDiv.style.display = 'block';
+    
+    try {
+        const response = await fetch('/share', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            messageDiv.className = 'message message-success';
+            messageDiv.textContent = data.message;
+            document.getElementById('shareForm').reset();
+        } else {
+            messageDiv.className = 'message message-error';
+            messageDiv.textContent = data.message;
+        }
+    } catch (error) {
+        messageDiv.className = 'message message-error';
+        messageDiv.textContent = 'An error occurred. Please try again.';
+    }
+});
+
+// Auto-fill key from stored keys and update form based on security mode
+document.getElementById('shareFileId').addEventListener('change', (e) => {
+    const fileId = parseInt(e.target.value);
+    const shareKeyInput = document.getElementById('shareKey');
+    const shareKeyGroup = document.getElementById('shareKeyGroup');
+    const shareKeyRequired = document.getElementById('shareKeyRequired');
+    const shareKeyHelpText = document.getElementById('shareKeyHelpText');
+    
+    if (!fileId) {
+        shareKeyInput.required = false;
+        shareKeyRequired.style.display = 'none';
+        shareKeyHelpText.textContent = 'Use the encryption key provided when you uploaded the file';
+        return;
+    }
+    
+    // Get security mode from file options
+    const selectedOption = document.getElementById('shareFileId').options[document.getElementById('shareFileId').selectedIndex];
+    const securityMode = selectedOption.dataset.mode || 'hash_encrypt';
+    
+    if (securityMode === 'hash') {
+        // Hash mode: No key needed
+        shareKeyInput.required = false;
+        shareKeyRequired.style.display = 'none';
+        shareKeyHelpText.textContent = 'No encryption key needed for Hash-only mode files';
+        shareKeyInput.placeholder = 'Not required for this file';
+        shareKeyInput.value = '';
+    } else if (securityMode === 'encrypt' || securityMode === 'hash_encrypt') {
+        // Encrypt or Hash+Encrypt: Key required
+        shareKeyInput.required = true;
+        shareKeyRequired.style.display = 'inline';
+        shareKeyHelpText.textContent = 'Use the encryption key provided when you uploaded the file';
+        shareKeyInput.placeholder = 'Paste encryption key from upload';
+        
+        // Auto-fill if available
+        if (storedKeys[fileId]) {
+            shareKeyInput.value = storedKeys[fileId];
+        }
+    }
+});
+
+// Verify file
+async function verifyFile() {
+    const fileId = document.getElementById('downloadFileId').value;
+    const key = document.getElementById('downloadKey').value;
+    
+    if (!fileId) {
+        alert('Please select a file');
+        return;
+    }
+    
+    const resultDiv = document.getElementById('verifyResult');
+    resultDiv.innerHTML = '<div class="loading">Verifying...</div>';
+    
+    try {
+        const requestBody = {};
+        if (key) {
+            requestBody.key = key;
+        }
+        
+        const response = await fetch(`/verify/${fileId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const data = await response.json();
+
+        // Check both HTTP status and JSON success field
+        const isHttpSuccess = response.ok;
+        const isJsonSuccess = data.success === true;
+        const isValid = isHttpSuccess && isJsonSuccess && data.is_valid === true;
+        
+        // Remember verify status for this file (only if successful AND valid)
+        lastVerifyStatus[fileId] = isValid;
+        
+        // Store the verified key if verification succeeded
+        if (isValid && key) {
+            verifiedKeys[fileId] = key;
+        } else {
+            // Clear verified key if verification failed
+            delete verifiedKeys[fileId];
+            delete lastVerifyStatus[fileId];
+        }
+        
+        // Only show success UI if both HTTP and JSON indicate success
+        if (isHttpSuccess && isJsonSuccess) {
+            // Verification was successful (but may have failed integrity check)
+            resultDiv.innerHTML = `
+                <div class="verify-status ${data.is_valid ? 'valid' : 'invalid'}">
+                    <i class="fas fa-${data.is_valid ? 'check-circle' : 'times-circle'}"></i>
+                    <h3>${data.is_valid ? 'File Integrity Verified' : 'File Integrity Check Failed'}</h3>
+                    <p>${data.message}</p>
+                    ${data.stored_hash && data.computed_hash ? `
+                    <div class="hash-comparison">
+                        <div><strong>Stored Hash:</strong> <code>${data.stored_hash}</code></div>
+                        <div><strong>Computed Hash:</strong> <code>${data.computed_hash}</code></div>
+                    </div>
+                    ` : ''}
+                    ${data.expected_size !== undefined && data.decrypted_size !== undefined ? `
+                    <div class="hash-comparison">
+                        <div><strong>Expected Size:</strong> <code>${data.expected_size} bytes</code></div>
+                        <div><strong>Decrypted Size:</strong> <code>${data.decrypted_size} bytes</code></div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            // Verification failed (wrong key, decryption error, HTTP error, etc.)
+            lastVerifyStatus[fileId] = false;
+            // Clear any previous successful verification status
+            delete lastVerifyStatus[fileId];
+            // Clear verified key
+            delete verifiedKeys[fileId];
+            
+            // Determine error message
+            let errorMessage = data.message || 'Verification failed. Please check your encryption key.';
+            if (!isHttpSuccess) {
+                errorMessage = data.message || `HTTP Error ${response.status}: Verification request failed.`;
+            }
+            if (!isJsonSuccess && data.message) {
+                errorMessage = data.message;
+            }
+            
+            resultDiv.innerHTML = `
+                <div class="verify-status invalid">
+                    <i class="fas fa-times-circle"></i>
+                    <h3>Verification Failed</h3>
+                    <p><strong>${errorMessage}</strong></p>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        ${data.message && data.message.includes('Invalid encryption key') 
+                            ? 'The encryption key you provided is incorrect. Please use the correct key that was used to encrypt this file.' 
+                            : 'The encryption key you provided is incorrect or the file cannot be decrypted. Please verify you are using the correct key.'}
+                    </p>
+                    <p style="margin-top: 0.5rem; color: var(--error-color); font-weight: 600;">
+                        ⚠️ Download is blocked until verification succeeds with the correct key.
+                    </p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        // Network error or JSON parse error
+        lastVerifyStatus[fileId] = false;
+        delete lastVerifyStatus[fileId];
+        delete verifiedKeys[fileId];
+        resultDiv.innerHTML = `
+            <div class="verify-status invalid">
+                <i class="fas fa-times-circle"></i>
+                <h3>Verification Failed</h3>
+                <p><strong>Network error or invalid response. Please try again.</strong></p>
+                <p style="margin-top: 0.5rem; color: var(--error-color); font-weight: 600;">
+                    ⚠️ Download is blocked until verification succeeds.
+                </p>
+            </div>
+        `;
+        console.error('Verification error:', error);
+    }
+}
+
+// When user changes file, force re-verify before allowing download again
+document.getElementById('downloadFileId').addEventListener('change', (e) => {
+    const fileId = e.target.value;
+    // Clear verification status when file changes
+    if (fileId) {
+        delete lastVerifyStatus[fileId];
+        delete verifiedKeys[fileId];
+    }
+    updateDownloadForm();
+});
+
+// Store the verified key for each file to ensure download uses the same key
+let verifiedKeys = {};
+
+document.getElementById('downloadKey').addEventListener('input', (e) => {
+    const fileId = document.getElementById('downloadFileId').value;
+    const currentKey = e.target.value;
+    
+    if (fileId) {
+        // Clear verification status when key changes
+        lastVerifyStatus[fileId] = false;
+        delete lastVerifyStatus[fileId];
+        
+        // Clear verified key if it doesn't match
+        if (verifiedKeys[fileId] && verifiedKeys[fileId] !== currentKey) {
+            delete verifiedKeys[fileId];
+        }
+    }
+    
+    const resultDiv = document.getElementById('verifyResult');
+    if (resultDiv) {
+        resultDiv.innerHTML = '';
+    }
+});
+
+// Download file
+async function downloadFile() {
+    const fileId = document.getElementById('downloadFileId').value;
+    const key = document.getElementById('downloadKey').value;
+    const messageDiv = document.getElementById('downloadMessage');
+    
+    if (!fileId) {
+        alert('Please select a file');
+        return;
+    }
+    
+    // Check if key is required
+    const selectedOption = document.getElementById('downloadFileId').options[document.getElementById('downloadFileId').selectedIndex];
+    const securityMode = selectedOption.dataset.mode || 'hash_encrypt';
+    
+    if ((securityMode === 'encrypt' || securityMode === 'hash_encrypt') && !key) {
+        alert('Please enter the encryption key');
+        return;
+    }
+
+    // For hash mode, skip verification requirement
+    if (securityMode !== 'hash') {
+        // Require a successful integrity check for encrypt and hash_encrypt modes
+        if (!lastVerifyStatus || !lastVerifyStatus[fileId] || lastVerifyStatus[fileId] === false || lastVerifyStatus[fileId] === undefined) {
+            if (messageDiv) {
+                messageDiv.className = 'message message-error';
+                messageDiv.textContent = '⚠️ Please verify file integrity successfully before downloading. Verification is required for security.';
+                messageDiv.style.display = 'block';
+            }
+            // Also show alert for better visibility
+            alert('Please verify file integrity successfully before downloading. Click "Verify Integrity" button first.');
+            return;
+        }
+    }
+    
+    // Additional check: Ensure the key being used for download matches the verified key
+    if ((securityMode === 'encrypt' || securityMode === 'hash_encrypt') && verifiedKeys[fileId]) {
+        if (key !== verifiedKeys[fileId]) {
+            if (messageDiv) {
+                messageDiv.className = 'message message-error';
+                messageDiv.textContent = '⚠️ The encryption key has changed. Please verify integrity again with the new key before downloading.';
+                messageDiv.style.display = 'block';
+            }
+            alert('The encryption key has changed. Please verify integrity again before downloading.');
+            // Clear verification status since key changed
+            lastVerifyStatus[fileId] = false;
+            delete verifiedKeys[fileId];
+            return;
+        }
+    }
+
+    // Clear any previous message
+    if (messageDiv) {
+        messageDiv.className = 'message';
+        messageDiv.textContent = 'Downloading...';
+        messageDiv.style.display = 'block';
+    }
+    
+    try {
+        // Build download URL with key if needed
+        let downloadUrl = `/download/${fileId}`;
+        if (key) {
+            downloadUrl += `?key=${encodeURIComponent(key)}`;
+        }
+        
+        const response = await fetch(downloadUrl);
+        const contentType = response.headers.get('Content-Type') || '';
+
+        // If backend returned JSON, it's an error message, not the file
+        if (!response.ok || contentType.includes('application/json')) {
+            let errorMsg = 'Download failed';
+            try {
+                const data = await response.json();
+                if (data && data.message) {
+                    errorMsg = data.message;
+                }
+            } catch (e) {
+                // ignore JSON parse errors
+            }
+
+            if (messageDiv) {
+                messageDiv.className = 'message message-error';
+                messageDiv.textContent = errorMsg;
+            }
+            return;
+        }
+
+        // Successful file download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        // Try to extract filename from Content-Disposition header
+        let filename = 'downloaded_file';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition && disposition.includes('filename=')) {
+            filename = disposition.split('filename=')[1].split(';')[0].replace(/"/g, '');
+        }
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        if (messageDiv) {
+            messageDiv.className = 'message message-success';
+            messageDiv.textContent = 'File downloaded successfully.';
+        }
+    } catch (error) {
+        if (messageDiv) {
+            messageDiv.className = 'message message-error';
+            messageDiv.textContent = 'Download failed. Please try again.';
+        }
+    }
+}
+
+// Utility functions
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function copyToClipboard(inputId) {
+    const input = document.getElementById(inputId);
+    input.select();
+    document.execCommand('copy');
+    
+    // Visual feedback
+    const btn = input.nextElementSibling;
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-check"></i>';
+    setTimeout(() => {
+        btn.innerHTML = originalHTML;
+    }, 1000);
+}
+
+// Dropdown handler to reveal hash / key on demand
+function onInfoSelectChange(fileId) {
+    const select = document.getElementById(`info-select-${fileId}`);
+    const output = document.getElementById(`info-output-${fileId}`);
+    if (!select || !output || !fileMeta[fileId]) return;
+
+    const meta = fileMeta[fileId];
+    const value = select.value;
+
+    if (value === 'hash') {
+        output.innerHTML = `<p><strong>Hash:</strong> <code>${meta.hash}</code></p>`;
+    } else if (value === 'key') {
+        const inputId = `key-${fileId}`;
+        output.innerHTML = `
+            <div class="key-display-inner">
+                <label>Encryption Key (SAVE THIS!):</label>
+                <div class="key-input-group">
+                    <input type="text" value="${meta.key}" readonly id="${inputId}">
+                    <button type="button" class="btn-icon" onclick="copyToClipboard('${inputId}')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    } else {
+        output.innerHTML = '';
+    }
+}
+
+// Load files on dashboard load
+loadFiles();
+</script>
+{% endblock %}
+

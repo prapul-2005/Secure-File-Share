@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Home - SecureDrive{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="hero-content">
+        <div class="hero-text">
+            <h1 class="hero-title">
+                <span class="gradient-text">Secure</span> File Sharing
+                <br>with Advanced Encryption
+            </h1>
+            <p class="hero-description">
+                Share your files securely through Google Drive with AES encryption 
+                and Blake3 hashing. Your data stays protected, always.
+            </p>
+            <div class="hero-buttons">
+                <a href="{{ url_for('register') }}" class="btn btn-large btn-primary">
+                    <i class="fas fa-rocket"></i> Get Started
+                </a>
+                <a href="{{ url_for('login') }}" class="btn btn-large btn-secondary">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </a>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="security-badge">
+                <i class="fas fa-lock"></i>
+                <span>AES-256 Encrypted</span>
+            </div>
+            <div class="security-badge">
+                <i class="fas fa-fingerprint"></i>
+                <span>Blake3 Hashed</span>
+            </div>
+            <div class="security-badge">
+                <i class="fab fa-google-drive"></i>
+                <span>Google Drive</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="features-section">
+    <div class="container">
+        <h2 class="section-title">Why Choose SecureDrive?</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3>Military-Grade Encryption</h3>
+                <p>AES-256 encryption ensures your files are protected with industry-standard security.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-hash"></i>
+                </div>
+                <h3>Integrity Verification</h3>
+                <p>Blake3 hashing guarantees file integrity and detects any tampering attempts.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-share-alt"></i>
+                </div>
+                <h3>Secure Sharing</h3>
+                <p>Share encrypted files with trusted users while maintaining full control over access.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fab fa-google-drive"></i>
+                </div>
+                <h3>Cloud Storage</h3>
+                <p>Seamless integration with Google Drive for reliable cloud storage and backup.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

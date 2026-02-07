@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Register - SecureDrive{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="auth-icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <h2>Create Account</h2>
+            <p>Join SecureDrive and start sharing files securely</p>
+        </div>
+        
+        <form id="registerForm" class="auth-form">
+            <div class="form-group">
+                <label for="username">
+                    <i class="fas fa-user"></i> Username
+                </label>
+                <input type="text" id="username" name="username" required 
+                       placeholder="Choose a username" autocomplete="username">
+            </div>
+            
+            <div class="form-group">
+                <label for="email">
+                    <i class="fas fa-envelope"></i> Email
+                </label>
+                <input type="email" id="email" name="email" required 
+                       placeholder="your.email@example.com" autocomplete="email">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">
+                    <i class="fas fa-lock"></i> Password
+                </label>
+                <input type="password" id="password" name="password" required 
+                       placeholder="Create a strong password" autocomplete="new-password">
+                <div class="password-strength" id="passwordStrength"></div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">
+                <i class="fas fa-user-plus"></i> Create Account
+            </button>
+        </form>
+        
+        <div class="auth-footer">
+            <p>Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
+        </div>
+        
+        <div id="message" class="message"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = {
+        username: document.getElementById('username').value,
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+    };
+    
+    const messageDiv = document.getElementById('message');
+    messageDiv.className = 'message';
+    messageDiv.textContent = 'Creating account...';
+    messageDiv.style.display = 'block';
+    
+    try {
+        const response = await fetch('/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            messageDiv.className = 'message message-success';
+            messageDiv.textContent = data.message;
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 1500);
+        } else {
+            messageDiv.className = 'message message-error';
+            messageDiv.textContent = data.message;
+        }
+    } catch (error) {
+        messageDiv.className = 'message message-error';
+        messageDiv.textContent = 'An error occurred. Please try again.';
+    }
+});
+
+// Password strength indicator
+document.getElementById('password').addEventListener('input', (e) => {
+    const password = e.target.value;
+    const strengthDiv = document.getElementById('passwordStrength');
+    
+    if (password.length === 0) {
+        strengthDiv.style.display = 'none';
+        return;
+    }
+    
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
+    if (password.match(/\d/)) strength++;
+    if (password.match(/[^a-zA-Z\d]/)) strength++;
+    
+    strengthDiv.style.display = 'block';
+    strengthDiv.className = 'password-strength';
+    
+    if (strength <= 1) {
+        strengthDiv.className += ' strength-weak';
+        strengthDiv.textContent = 'Weak';
+    } else if (strength === 2) {
+        strengthDiv.className += ' strength-medium';
+        strengthDiv.textContent = 'Medium';
+    } else {
+        strengthDiv.className += ' strength-strong';
+        strengthDiv.textContent = 'Strong';
+    }
+});
+</script>
+{% endblock %}
+
